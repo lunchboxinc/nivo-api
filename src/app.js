@@ -24,10 +24,16 @@ const mapping = require('./mapping')
 const samples = require('./samples')
 const render = require('./lib/render')
 
+const router = express.Router()
+
+
+const prefix = `visualizations`
+
 app.enable('trust proxy')
 app.set('json spaces', 4)
 app.use(cors())
 app.use(bodyParser.json())
+
 app.use(
     expressWinston.logger({
         transports: [
@@ -43,12 +49,14 @@ app.use(
 )
 app.use(compression())
 
-app.get('/', (req, res) => {
+app.use(`/${prefix}`, router)
+
+router.get('/', (req, res) => {
     console.log('sending')
     res.sendFile(path.resolve(__dirname, 'api.yml'))
 })
 
-app.get('/status', (req, res) => {
+router.get('/status', (req, res) => {
     res.status(200).json({
         status: 'ok',
         uptime: `${process.uptime()} second(s)`,
@@ -61,10 +69,10 @@ app.get('/status', (req, res) => {
 })
 
 _.forOwn(mapping, ({ schema }, type) => {
-    app.post(`/charts/${type}`, validate(schema), (req, res) => {
+    router.post(`/charts/${type}`, validate(schema), (req, res) => {
         const props = req.payload
         const id = uuid.v4()
-        const url = `${req.protocol}://${req.get('host')}/r/${id}`
+        const url = `${req.protocol}://${req.get('host')}/${prefix}/r/${id}`
 
         storage.set(id, {
             type,
@@ -76,11 +84,11 @@ _.forOwn(mapping, ({ schema }, type) => {
     })
 })
 
-app.get('/r', (req, res) => {
+router.get('/r', (req, res) => {
     res.status(200).json(storage.dump())
 })
 
-app.get('/r/:id', (req, res) => {
+router.get('/r/:id', (req, res) => {
     const { id } = req.params
     const config = storage.get(req.params.id)
 
@@ -94,7 +102,7 @@ app.get('/r/:id', (req, res) => {
 })
 
 _.forOwn(samples, (config, id) => {
-    app.get(`/samples/${id}.svg`, (req, res) => {
+    router.get(`/${prefix}/samples/${id}.svg`, (req, res) => {
         const rendered = render.chart(config, req.query)
 
         res.set('Content-Type', 'image/svg+xml').status(200).send(rendered)
